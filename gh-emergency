@@ -1,35 +1,104 @@
-#!/usr/bin/env bash
-set -e
+#!/usr/bin/env sh
+VERSION="0.1"
 
-echo "Hello gh-emergency!"
+version() {
+  printf "gh-emergency version %s\n" "$VERSION"
+  git --version
+  gh version
+}
 
-# Snippets to help get started:
+current_branch() {
+  basename "$(git symbolic-ref HEAD)"
+}
 
-# Determine if an executable is in the PATH
-# if ! type -p ruby >/dev/null; then
-#   echo "Ruby not found on the system" >&2
-#   exit 1
-# fi
+current_epoch() {
+  date +%s
+}
 
-# Pass arguments through to another command
-# gh issue list "$@" -R cli/cli
+user_email() {
+  git config user.email
+}
 
-# Using the gh api command to retrieve and format information
-# QUERY='
-#   query($endCursor: String) {
-#     viewer {
-#       repositories(first: 100, after: $endCursor) {
-#         nodes {
-#           nameWithOwner
-#           stargazerCount
-#         }
-#       }
-#     }
-#   }
-# '
-# TEMPLATE='
-#   {{- range $repo := .data.viewer.repositories.nodes -}}
-#     {{- printf "name: %s - stargazers: %v\n" $repo.nameWithOwner $repo.stargazerCount -}}
-#   {{- end -}}
-# '
-# exec gh api graphql -f query="${QUERY}" --paginate --template="${TEMPLATE}"
+new_branch() {
+  echo "emergency-${1:-$(current_branch)}-$(current_epoch)"
+}
+
+emergency() {
+  initial_branch="$(current_branch)"
+  new_branch_name="emergency-$(current_epoch)-$(echo "$initial_branch" | tr '[:upper:]' '[:lower:]' | tr '/' '-')"
+  
+  git checkout -b "$new_branch_name" >> emergency.log 2>&1
+  if [ $? -ne 0 ]; then
+    echo "Failed to create new branch. Check emergency.log for details."
+    exit 1
+  fi
+  
+  cd "$(git rev-parse --show-toplevel)" >> emergency.log 2>&1
+  if [ $? -ne 0 ]; then
+    echo "Failed to navigate to git root directory. Check emergency.log for details."
+    exit 1
+  fi
+  
+  git add -A >> emergency.log 2>&1
+  if [ $? -ne 0 ]; then
+    echo "Failed to stage changes. Check emergency.log for details."
+    exit 1
+  fi
+  
+  if [ -z "$1" ]; then
+    message="EMERGENCY($(user_email)): [$(current_branch)] Emergency commit at $(date +"%Y-%m-%d %H:%M:%S")"
+  else
+    message="EMERGENCY($(user_email)): [$(current_branch)] $*"
+  fi
+  git commit -m "$message" --no-verify >> emergency.log 2>&1
+  if [ $? -ne 0 ]; then
+    echo "Failed to create commit. Check emergency.log for details."
+    exit 1
+  fi
+  
+  remotes=$(git remote)
+  if [ -z "$remotes" ]; then
+    echo "No remotes found. Changes will only be saved locally." | tee -a emergency.log
+    push_success=false
+  else
+    push_success=true
+    for remote in $remotes; do
+      echo "Pushing to remote: $remote"
+      git push --no-verify --set-upstream "${remote}" "$new_branch_name" >> emergency.log 2>&1
+      if [ $? -ne 0 ]; then
+        echo "Failed to push to remote: $remote. Check emergency.log for details." | tee -a emergency.log
+        push_success=false
+      else
+        echo "Successfully pushed to remote: $remote"
+      fi
+    done
+  fi
+  
+  if [ "$(git stash list)" != '' ]; then
+    for sha in $(git rev-list -g stash); do
+      git push --no-verify origin "$sha":refs/heads/"$(current_branch $initial_branch)"-stash-"$sha" >> emergency.log 2>&1
+    done
+  fi
+  
+  if $push_success; then
+    printf "\n\nEmergency handled! Changes pushed to branch: $new_branch_name\n"
+  else
+    printf "\n\nEmergency partially handled. Some pushes failed or no remotes found. Check emergency.log for details.\n"
+  fi
+}
+
+display_help() {
+  cat <<-EOF
+gh-emergency@$VERSION
+  gh emergency [<optional_custom_message>]       Add, commit, and push to remote in case of emergency
+options:
+  -V, --version                   Output current version of gh-emergency
+  -h, --help                      Display this help information
+EOF
+}
+
+case $1 in
+  -v | --version)  version;       exit 0 ;;
+  -h | --help)     display_help;  exit 0 ;;
+  *)               emergency "$@" ;;
+esac
