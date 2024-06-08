@@ -1,8 +1,16 @@
 #!/usr/bin/env sh
 VERSION="0.1"
 
+# Color functions using tput
+red() { tput setaf 1; printf "%s" "$*"; tput sgr0; }
+green() { tput setaf 2; printf "%s" "$*"; tput sgr0; }
+yellow() { tput setaf 3; printf "%s" "$*"; tput sgr0; }
+blue() { tput setaf 4; printf "%s" "$*"; tput sgr0; }
+magenta() { tput setaf 5; printf "%s" "$*"; tput sgr0; }
+cyan() { tput setaf 6; printf "%s" "$*"; tput sgr0; }
+
 version() {
-  printf "gh-emergency version %s\n" "$VERSION"
+  cyan "gh-emergency version $VERSION\n"
   git --version
   gh version
 }
@@ -29,19 +37,19 @@ emergency() {
   
   git checkout -b "$new_branch_name" >> emergency.log 2>&1
   if [ $? -ne 0 ]; then
-    echo "Failed to create new branch. Check emergency.log for details."
+    red "Failed to create new branch. Check emergency.log for details."
     exit 1
   fi
   
   cd "$(git rev-parse --show-toplevel)" >> emergency.log 2>&1
   if [ $? -ne 0 ]; then
-    echo "Failed to navigate to git root directory. Check emergency.log for details."
+    red "Failed to navigate to git root directory. Check emergency.log for details."
     exit 1
   fi
   
   git add -A >> emergency.log 2>&1
   if [ $? -ne 0 ]; then
-    echo "Failed to stage changes. Check emergency.log for details."
+    red "Failed to stage changes. Check emergency.log for details."
     exit 1
   fi
   
@@ -52,24 +60,24 @@ emergency() {
   fi
   git commit -m "$message" --no-verify >> emergency.log 2>&1
   if [ $? -ne 0 ]; then
-    echo "Failed to create commit. Check emergency.log for details."
+    red "Failed to create commit. Check emergency.log for details."
     exit 1
   fi
   
   remotes=$(git remote)
   if [ -z "$remotes" ]; then
-    echo "No remotes found. Changes will only be saved locally." | tee -a emergency.log
+    yellow "No remotes found. Changes will only be saved locally." | tee -a emergency.log
     push_success=false
   else
     push_success=true
     for remote in $remotes; do
-      echo "Pushing to remote: $remote"
+      blue "Pushing to remote: $remote"
       git push --no-verify --set-upstream "${remote}" "$new_branch_name" >> emergency.log 2>&1
       if [ $? -ne 0 ]; then
-        echo "Failed to push to remote: $remote. Check emergency.log for details." | tee -a emergency.log
+        red "Failed to push to remote: $remote. Check emergency.log for details." | tee -a emergency.log
         push_success=false
       else
-        echo "Successfully pushed to remote: $remote"
+        green "Successfully pushed to remote: $remote"
       fi
     done
   fi
@@ -81,19 +89,20 @@ emergency() {
   fi
   
   if $push_success; then
-    printf "\n\nEmergency handled! Changes pushed to branch: $new_branch_name\n"
+    printf "\n"; green "Emergency handled! Changes pushed to branch: $new_branch_name\n"
   else
-    printf "\n\nEmergency partially handled. Some pushes failed or no remotes found. Check emergency.log for details.\n"
+    printf "\n"; yellow "Emergency partially handled. Some pushes failed or no remotes found. Check emergency.log for details.\n"
   fi
 }
 
 display_help() {
   cat <<-EOF
-gh-emergency@$VERSION
-  gh emergency [<optional_custom_message>]       Add, commit, and push to remote in case of emergency
+$(cyan "gh-emergency@$VERSION")
+usage:
+  $(magenta "gh emergency [<message>]")       Add, commit, and push to remote in case of emergency
 options:
-  -V, --version                   Output current version of gh-emergency
-  -h, --help                      Display this help information
+  $(magenta "-V, --version")                   Output current version of gh-emergency
+  $(magenta "-h, --help")                      Display this help information
 EOF
 }
 
