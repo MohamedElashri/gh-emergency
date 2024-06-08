@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-VERSION="0.1"
+VERSION="0.2"
 
 # Color functions using tput
 red() { tput setaf 1; printf "%s" "$*"; tput sgr0; }
@@ -97,7 +97,11 @@ emergency() {
 
 display_help() {
   cat <<-EOF
-$(cyan "gh-emergency@$VERSION")
+$(cyan "Emergence extension for your code")
+$(yellow "gh emergency") [<message>] 
+$(green "Add, commit, and push to remote in case of emergency")
+$(red "VERSION $VERSION")
+
 usage:
   $(magenta "gh emergency [<message>]")       Add, commit, and push to remote in case of emergency
 options:
